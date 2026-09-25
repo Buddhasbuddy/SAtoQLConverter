@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brightspace Self-Assessment → Question Library</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Brightspace utility</p>
+        <h1>Self-Assessment → Question Library</h1>
+        <p class="lede">Convert Brightspace Self-Assessments into Question Library folders while preserving the original question XML.</p>
+      </div>
+      <span class="badge">Runs in your browser</span>
+    </header>
+
+    <section class="panel" aria-labelledby="upload-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="upload-title">1. Select source files</h2>
+          <p>Use an original Brightspace course-export ZIP, or select one or more <code>selfassess_d2l_*.xml</code> files.</p>
+        </div>
+      </div>
+
+      <label id="drop-zone" class="drop-zone" for="file-input">
+        <input id="file-input" type="file" multiple accept=".zip,.xml,application/zip,text/xml,application/xml">
+        <span class="drop-icon" aria-hidden="true">⇧</span>
+        <strong>Drop a Brightspace export ZIP or Self-Assessment XML files here</strong>
+        <span>or click to choose files</span>
+      </label>
+
+      <p class="note"><strong>Course files are not repackaged.</strong> Existing <code>src</code> and <code>href</code> references are preserved because the Question Library package is intended to be imported back into the same course.</p>
+
+      <div class="actions">
+        <button id="reset-button" class="button secondary" type="button" disabled>Reset</button>
+      </div>
+    </section>
+
+    <section id="analysis-panel" class="panel hidden" aria-labelledby="analysis-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="analysis-title">2. Review what was found</h2>
+          <p id="source-summary"></p>
+        </div>
+        <span id="analysis-status" class="status-pill">Ready</span>
+      </div>
+
+      <div id="assessment-list" class="assessment-list"></div>
+
+      <div id="analysis-warnings" class="messages"></div>
+
+      <div class="actions">
+        <button id="convert-button" class="button primary" type="button" disabled>Create Question Library package</button>
+      </div>
+    </section>
+
+    <section id="result-panel" class="panel hidden" aria-labelledby="result-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="result-title">3. Validation and download</h2>
+          <p>The package is offered only after structural and source-preservation validation passes.</p>
+        </div>
+        <span id="result-status" class="status-pill">Waiting</span>
+      </div>
+
+      <div id="validation-list" class="validation-list"></div>
+      <div id="result-messages" class="messages"></div>
+
+      <div class="actions">
+        <a id="download-link" class="button primary hidden" download="Brightspace_QuestionLibrary_Migration.zip">Download Brightspace Question Library ZIP</a>
+      </div>
+    </section>
+
+    <section class="panel compact" aria-labelledby="details-title">
+      <details>
+        <summary id="details-title">What the converter changes</summary>
+        <div class="details-content">
+          <p>Each source question is cloned as a complete <code>&lt;item&gt;</code>. The converter assigns a new numeric <code>d2l_2p0:id</code> and removes only the source-specific <code>qmd_globalid</code> and <code>qmd_displayid</code> metadata fields.</p>
+          <p>It creates one Question Library section per Self-Assessment, generates a new minimal <code>imsmanifest.xml</code>, and packages only <code>imsmanifest.xml</code> and <code>questiondb.xml</code>.</p>
+        </div>
+      </details>
+    </section>
+
+    <footer>
+      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course.</p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

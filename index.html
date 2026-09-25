@@ -94,17 +94,22 @@
     </section>
 
     <footer>
-      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.1.0</strong></p>
+      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.1.1</strong></p>
     </footer>
   </main>
 
-  <script src="script.js?v=1.1.0" onerror="window.__saqlScriptLoadFailed=true"></script>
+  <script src="script.js?v=1.1.1" onerror="window.__saqlScriptLoadFailed=true"></script>
   <script>
     window.addEventListener("load", function () {
       const diagnostic = document.getElementById("app-diagnostic");
       if (!diagnostic) return;
       if (window.__saqlScriptLoadFailed || !window.SAQL) {
         diagnostic.textContent = "Converter JavaScript did not load. Confirm that script.js is in the same GitHub Pages folder as index.html and that the filename uses exactly this lowercase spelling.";
+        diagnostic.classList.remove("hidden");
+        return;
+      }
+      if (window.SAQL.build !== "1.1.1") {
+        diagnostic.textContent = "An older cached converter script is still loaded. Refresh the page with Ctrl+F5. Expected build 1.1.1 but loaded " + (window.SAQL.build || "an unversioned script") + ".";
         diagnostic.classList.remove("hidden");
       }
     });

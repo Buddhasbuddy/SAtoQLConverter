@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Brightspace Self-Assessment → Question Library</title>
+  <title>Brightspace Self-Assessment Converter</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="shell">
     <header class="hero">
       <div>
-        <h1>Self-Assessment → Question Library</h1>
-        <p class="lede">Convert Brightspace Self-Assessments into Question Library folders.</p>
+        <h1>Brightspace Self-Assessment Converter</h1>
+        <p class="lede">Convert Brightspace Self-Assessments into Question Library folders or Quizzes.</p>
       </div>
     </header>
 
@@ -30,7 +30,7 @@
         <span>or click to choose files</span>
       </label>
 
-      <p class="note"><strong>Note: </strong>Question Library package is intended to be imported back into the same course.</p>
+      <p class="note"><strong>Note: </strong>The generated package is intended to be imported back into the same Brightspace course.</p>
 
       <div id="app-diagnostic" class="message warning hidden" role="status"></div>
 
@@ -49,6 +49,26 @@
       </div>
 
       <div id="assessment-list" class="assessment-list"></div>
+
+      <fieldset class="conversion-options">
+        <legend>Choose what to create</legend>
+
+        <label class="conversion-option">
+          <input type="radio" name="output-mode" value="question-library" checked>
+          <span>
+            <strong>Question Library folders</strong>
+            <small>Create one Question Library folder for each Self-Assessment.</small>
+          </span>
+        </label>
+
+        <label class="conversion-option">
+          <input type="radio" name="output-mode" value="quizzes">
+          <span>
+            <strong>Quizzes</strong>
+            <small>Create one inactive Quiz for each Self-Assessment. Zero-point Self-Assessment questions become 1-point quiz questions.</small>
+          </span>
+        </label>
+      </fieldset>
 
       <div id="analysis-warnings" class="messages"></div>
 
@@ -69,16 +89,16 @@
       <div id="result-messages" class="messages"></div>
 
       <div class="actions">
-        <a id="download-link" class="button primary hidden" download="Brightspace_QuestionLibrary_Migration.zip">Download Brightspace Question Library ZIP</a>
+        <a id="download-link" class="button primary hidden" download="Brightspace_QuestionLibrary_Migration.zip">Download package</a>
       </div>
     </section>
 
     <footer>
-      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.0.1</strong></p>
+      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.1.0</strong></p>
     </footer>
   </main>
 
-  <script src="script.js?v=1.0.1" onerror="window.__saqlScriptLoadFailed=true"></script>
+  <script src="script.js?v=1.1.0" onerror="window.__saqlScriptLoadFailed=true"></script>
   <script>
     window.addEventListener("load", function () {
       const diagnostic = document.getElementById("app-diagnostic");

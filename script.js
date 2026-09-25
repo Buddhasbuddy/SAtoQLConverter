@@ -2,7 +2,8 @@
   "use strict";
 
   const D2L_NS = "http://desire2learn.com/xsd/d2lcp_v2p0";
-  const OUTPUT_NAME = "Brightspace_QuestionLibrary_Migration.zip";
+  const QUESTION_LIBRARY_OUTPUT_NAME = "Brightspace_QuestionLibrary_Migration.zip";
+  const QUIZ_OUTPUT_NAME = "Brightspace_SelfAssessment_Quizzes.zip";
   const XML_DEC = '<?xml version="1.0" encoding="UTF-8"?>';
 
   const fileInput = document.getElementById("file-input");
@@ -19,6 +20,7 @@
   const validationList = document.getElementById("validation-list");
   const resultMessages = document.getElementById("result-messages");
   const downloadLink = document.getElementById("download-link");
+  const outputModeInputs = [...document.querySelectorAll('input[name="output-mode"]')];
 
   let state = freshState();
 
@@ -36,6 +38,12 @@
   fileInput.addEventListener("change", () => handleFiles([...fileInput.files]));
   resetButton.addEventListener("click", resetApp);
   convertButton.addEventListener("click", convertAndPackage);
+  outputModeInputs.forEach(input => {
+    input.addEventListener("change", () => {
+      resetOutputOnly();
+      updateConversionUi();
+    });
+  });
 
   ["dragenter", "dragover"].forEach(type => {
     dropZone.addEventListener(type, event => {
@@ -92,6 +100,7 @@
       if (!state.assessments.length) throw new Error("No Brightspace Self-Assessments were found in the selected source.");
 
       renderAnalysis();
+      updateConversionUi();
       setStatus(analysisStatus, "Ready", "success");
       convertButton.disabled = false;
     } catch (error) {
@@ -200,7 +209,7 @@
       references: extractLocalReferences(item)
     }));
 
-    return { sourceName, title, doc, questions };
+    return { sourceName, title, doc, assessmentNode: assessment, container, questions };
   }
 
   function renderAnalysis() {
@@ -237,6 +246,23 @@
     state.warnings.forEach(w => showMessage(analysisWarnings, w, "warning"));
   }
 
+  function currentOutputMode() {
+    return outputModeInputs.find(input => input.checked)?.value || "question-library";
+  }
+
+  function updateConversionUi() {
+    const mode = currentOutputMode();
+    if (mode === "quizzes") {
+      convertButton.textContent = "Create Quiz package";
+      downloadLink.textContent = "Download Brightspace Quiz ZIP";
+      downloadLink.download = QUIZ_OUTPUT_NAME;
+    } else {
+      convertButton.textContent = "Create Question Library package";
+      downloadLink.textContent = "Download Brightspace Question Library ZIP";
+      downloadLink.download = QUESTION_LIBRARY_OUTPUT_NAME;
+    }
+  }
+
   async function convertAndPackage() {
     convertButton.disabled = true;
     resultPanel.classList.remove("hidden");
@@ -246,35 +272,56 @@
     setStatus(resultStatus, "Converting…", "");
 
     try {
-      const { manifestXml, questionDbXml, mappings } = buildQuestionLibrary(state.assessments);
-      const validation = validateConversion(state.assessments, manifestXml, questionDbXml, mappings);
-      renderValidation(validation.checks);
+      const mode = currentOutputMode();
+      let outputFiles;
+      let outputName;
+      let validation;
+      let quizCount = 0;
+
+      if (mode === "quizzes") {
+        const quizPackage = buildQuizzes(state.assessments);
+        outputFiles = [
+          { name: "imsmanifest.xml", text: quizPackage.manifestXml },
+          ...quizPackage.quizFiles.map(file => ({ name: file.name, text: file.xml }))
+        ];
+        outputName = QUIZ_OUTPUT_NAME;
+        quizCount = quizPackage.quizFiles.length;
+        validation = validateQuizConversion(state.assessments, quizPackage.manifestXml, quizPackage.quizFiles);
+      } else {
+        const questionLibrary = buildQuestionLibrary(state.assessments);
+        outputFiles = [
+          { name: "imsmanifest.xml", text: questionLibrary.manifestXml },
+          { name: "questiondb.xml", text: questionLibrary.questionDbXml }
+        ];
+        outputName = QUESTION_LIBRARY_OUTPUT_NAME;
+        validation = validateConversion(state.assessments, questionLibrary.manifestXml, questionLibrary.questionDbXml, questionLibrary.mappings);
+      }
+
+      renderValidation(validation.checks, mode, quizCount);
 
       if (!validation.ok) {
         setStatus(resultStatus, "Validation failed", "error");
         showMessage(resultMessages, "The package was not generated because one or more validation checks failed.", "error");
-        convertButton.disabled = false;
         return;
       }
 
-      const zipBlob = createStoredZip([
-        { name: "imsmanifest.xml", text: manifestXml },
-        { name: "questiondb.xml", text: questionDbXml }
-      ]);
+      const zipBlob = createStoredZip(outputFiles);
 
-      // Validate the ZIP we are actually returning.
-      const outputFile = new File([zipBlob], OUTPUT_NAME, { type: "application/zip" });
+      // Validate the ZIP bytes that will actually be returned.
+      const outputFile = new File([zipBlob], outputName, { type: "application/zip" });
       const zipCheck = new SelectiveZipReader(outputFile);
       await zipCheck.init();
-      const manifestEntry = zipCheck.findEntry("imsmanifest.xml");
-      const questionEntry = zipCheck.findEntry("questiondb.xml");
-      if (!manifestEntry || !questionEntry) throw new Error("Final ZIP validation failed: required XML files were not found at ZIP root.");
-      parseXml(await zipCheck.readText(manifestEntry), "final imsmanifest.xml");
-      parseXml(await zipCheck.readText(questionEntry), "final questiondb.xml");
+
+      for (const file of outputFiles) {
+        const entry = zipCheck.findEntry(file.name);
+        if (!entry) throw new Error(`Final ZIP validation failed: ${file.name} was not found at ZIP root.`);
+        if (/\.xml$/i.test(file.name)) parseXml(await zipCheck.readText(entry), `final ${file.name}`);
+      }
 
       if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
       state.outputUrl = URL.createObjectURL(zipBlob);
       downloadLink.href = state.outputUrl;
+      downloadLink.download = outputName;
       downloadLink.classList.remove("hidden");
       setStatus(resultStatus, "Package passed local validation", "success");
     } catch (error) {
@@ -317,6 +364,309 @@
     const manifestXml = `${XML_DEC}\n<manifest identifier="MANIFEST_SELFASSESS_QUESTION_LIBRARY" xmlns:d2l_2p0="${D2L_NS}" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"><resources><resource identifier="res_question_library" type="webcontent" d2l_2p0:material_type="d2lquestionlibrary" d2l_2p0:link_target="" href="questiondb.xml" title="Question Library" /></resources></manifest>`;
 
     return { manifestXml, questionDbXml, mappings };
+  }
+
+
+  function buildQuizzes(assessments) {
+    const quizFiles = [];
+    const resources = [];
+
+    assessments.forEach((assessment, assessmentIndex) => {
+      const number = assessmentIndex + 1;
+      const resourceId = `res_quiz_migrated_${number}`;
+      const filename = `quiz_d2l_migrated_${number}.xml`;
+      const outDoc = parseXml(`${XML_DEC}<questestinterop xmlns:d2l_2p0="${D2L_NS}"></questestinterop>`, "generated Quiz scaffold");
+      const root = outDoc.documentElement;
+      const quizAssessment = outDoc.createElement("assessment");
+
+      quizAssessment.setAttributeNS(D2L_NS, "d2l_2p0:id", String(number));
+      quizAssessment.setAttribute("title", assessment.title);
+      quizAssessment.setAttribute("ident", resourceId);
+
+      quizAssessment.appendChild(createQuizRubric(outDoc));
+      quizAssessment.appendChild(createQuizAssessmentControl(outDoc, assessment.assessmentNode));
+
+      const sourcePresentation = directChildren(assessment.assessmentNode).find(node => node.localName === "presentation_material");
+      quizAssessment.appendChild(
+        sourcePresentation
+          ? outDoc.importNode(sourcePresentation, true)
+          : createQuizPresentation(outDoc)
+      );
+
+      quizAssessment.appendChild(createQuizProcessExtension(outDoc));
+      quizAssessment.appendChild(createQuizFeedback(outDoc));
+
+      const copiedContainer = outDoc.importNode(assessment.container, true);
+      [...copiedContainer.getElementsByTagName("item")].forEach(item => {
+        removeIdentityMetadata(item);
+        ensureQuizQuestionWeight(item);
+      });
+      quizAssessment.appendChild(copiedContainer);
+      root.appendChild(quizAssessment);
+
+      const xml = serializeXml(outDoc);
+      quizFiles.push({ name: filename, xml, resourceId, title: assessment.title });
+      resources.push(
+        `<resource identifier="${escapeXmlAttr(resourceId)}" type="webcontent" d2l_2p0:material_type="d2lquiz" d2l_2p0:link_target="" href="${escapeXmlAttr(filename)}" title="${escapeXmlAttr(assessment.title)}" />`
+      );
+    });
+
+    const manifestXml = `${XML_DEC}
+<manifest identifier="MANIFEST_SELFASSESS_QUIZZES" xmlns:d2l_2p0="${D2L_NS}" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"><resources>${resources.join("")}</resources></manifest>`;
+
+    return { manifestXml, quizFiles };
+  }
+
+  function createQuizRubric(doc) {
+    const rubric = doc.createElement("rubric");
+    const flow = doc.createElement("flow_mat");
+    const material = doc.createElement("material");
+    const mattext = doc.createElement("mattext");
+    mattext.setAttributeNS(D2L_NS, "d2l_2p0:isdisplayed", "yes");
+    mattext.setAttribute("texttype", "text/plain");
+    material.appendChild(mattext);
+    flow.appendChild(material);
+    rubric.appendChild(flow);
+    return rubric;
+  }
+
+  function createQuizAssessmentControl(doc, sourceAssessment) {
+    const control = doc.createElement("assessmentcontrol");
+    control.setAttribute("hide_question_pointsswitch", "no");
+
+    const sourceControl = directChildren(sourceAssessment).find(node => node.localName === "assessmentcontrol");
+    for (const name of ["hintswitch", "solutionswitch", "feedbackswitch"]) {
+      control.setAttribute(name, sourceControl?.getAttribute(name) || "no");
+    }
+    return control;
+  }
+
+  function createQuizPresentation(doc) {
+    const presentation = doc.createElement("presentation_material");
+    const flow = doc.createElement("flow_mat");
+
+    for (const label of ["page header", "page footer"]) {
+      const material = doc.createElement("material");
+      material.setAttribute("label", label);
+      const mattext = doc.createElement("mattext");
+      mattext.setAttributeNS(D2L_NS, "d2l_2p0:isdisplayed", "yes");
+      mattext.setAttribute("texttype", "text/html");
+      material.appendChild(mattext);
+      flow.appendChild(material);
+    }
+
+    presentation.appendChild(flow);
+    return presentation;
+  }
+
+  function appendD2lTextElement(doc, parent, localName, text) {
+    const node = doc.createElementNS(D2L_NS, `d2l_2p0:${localName}`);
+    if (text !== null && text !== undefined) node.textContent = text;
+    parent.appendChild(node);
+    return node;
+  }
+
+  function createQuizProcessExtension(doc) {
+    const extension = doc.createElement("assess_procextension");
+
+    const intro = doc.createElementNS(D2L_NS, "d2l_2p0:intro_message");
+    intro.setAttributeNS(D2L_NS, "d2l_2p0:isdisplayed", "no");
+    intro.setAttribute("texttype", "text/plain");
+    extension.appendChild(intro);
+
+    appendD2lTextElement(doc, extension, "disable_right_click", "no");
+    appendD2lTextElement(doc, extension, "disable_pager_access", "no");
+
+    const active = doc.createElement("is_active");
+    active.textContent = "no";
+    extension.appendChild(active);
+
+    appendD2lTextElement(doc, extension, "annotation_tools_enabled", "yes");
+    appendD2lTextElement(doc, extension, "date_start", null);
+    appendD2lTextElement(doc, extension, "date_end", null);
+    appendD2lTextElement(doc, extension, "date_due", null);
+    appendD2lTextElement(doc, extension, "has_schedule_event", "no");
+    appendD2lTextElement(doc, extension, "is_attempt_Rldb", "no");
+    appendD2lTextElement(doc, extension, "is_subview_Rldb", "no");
+    appendD2lTextElement(doc, extension, "time_limit", "0");
+    appendD2lTextElement(doc, extension, "show_clock", "no");
+    appendD2lTextElement(doc, extension, "enforce_time_limit", "no");
+    appendD2lTextElement(doc, extension, "quiz_start_type", "no");
+    appendD2lTextElement(doc, extension, "grace_period", "0");
+    appendD2lTextElement(doc, extension, "late_limit", "0");
+    appendD2lTextElement(doc, extension, "attempts_allowed", "1");
+    appendD2lTextElement(doc, extension, "attempt_restrictions", null);
+    appendD2lTextElement(doc, extension, "mark_calculation_type", "1");
+    appendD2lTextElement(doc, extension, "is_forward_only", "no");
+    appendD2lTextElement(doc, extension, "paging_type_id", "0");
+
+    return extension;
+  }
+
+  function createQuizFeedback(doc) {
+    const feedback = doc.createElement("assessfeedback");
+    const rubric = doc.createElement("rubric");
+    const flow = doc.createElement("flow_mat");
+    const material = doc.createElement("material");
+    const mattext = doc.createElement("mattext");
+    mattext.setAttribute("texttype", "no");
+
+    material.appendChild(mattext);
+    flow.appendChild(material);
+    rubric.appendChild(flow);
+    feedback.appendChild(rubric);
+
+    appendD2lTextElement(doc, feedback, "duration", "0");
+    appendD2lTextElement(doc, feedback, "response_display_type_id", "1");
+    appendD2lTextElement(doc, feedback, "show_correct_answers", "no");
+    appendD2lTextElement(doc, feedback, "submission_restrictip", "no");
+    appendD2lTextElement(doc, feedback, "show_class_average", "no");
+    appendD2lTextElement(doc, feedback, "show_score_distribution", "no");
+
+    return feedback;
+  }
+
+  function ensureQuizQuestionWeight(item) {
+    const fields = [...item.getElementsByTagName("qti_metadatafield")];
+    let weightField = fields.find(field => {
+      const label = [...field.children].find(child => child.localName === "fieldlabel");
+      return label?.textContent.trim() === "qmd_weighting";
+    });
+
+    if (!weightField) {
+      const metadata = firstByLocalName(item, "qtimetadata");
+      if (!metadata) return;
+      weightField = item.ownerDocument.createElement("qti_metadatafield");
+      const label = item.ownerDocument.createElement("fieldlabel");
+      const entry = item.ownerDocument.createElement("fieldentry");
+      label.textContent = "qmd_weighting";
+      entry.textContent = "1.000000000";
+      weightField.append(label, entry);
+      metadata.appendChild(weightField);
+      return;
+    }
+
+    const entry = [...weightField.children].find(child => child.localName === "fieldentry");
+    if (!entry) return;
+    const value = Number.parseFloat(entry.textContent.trim());
+    if (!Number.isFinite(value) || value <= 0) entry.textContent = "1.000000000";
+  }
+
+  function getQuestionWeight(item) {
+    for (const field of [...item.getElementsByTagName("qti_metadatafield")]) {
+      const label = [...field.children].find(child => child.localName === "fieldlabel");
+      const entry = [...field.children].find(child => child.localName === "fieldentry");
+      if (label?.textContent.trim() === "qmd_weighting") {
+        const value = Number.parseFloat(entry?.textContent.trim() || "");
+        return Number.isFinite(value) ? value : null;
+      }
+    }
+    return null;
+  }
+
+  function validateQuizConversion(assessments, manifestXml, quizFiles) {
+    const checks = [];
+    const pass = message => checks.push({ status: "pass", message });
+    const fail = message => checks.push({ status: "fail", message });
+
+    let manifestDoc;
+    try {
+      manifestDoc = parseXml(manifestXml, "generated imsmanifest.xml");
+      pass("Generated imsmanifest.xml is well-formed XML.");
+    } catch (error) {
+      fail(error.message);
+      return { ok: false, checks };
+    }
+
+    const resources = [...manifestDoc.getElementsByTagNameNS("*", "resource")]
+      .filter(resource => (resource.getAttributeNS(D2L_NS, "material_type") || resource.getAttribute("d2l_2p0:material_type")) === "d2lquiz");
+
+    if (resources.length !== assessments.length || quizFiles.length !== assessments.length) {
+      fail(`Expected ${assessments.length} Quiz resources/files but generated ${quizFiles.length}.`);
+      return { ok: false, checks };
+    }
+
+    let xmlOk = true;
+    let structureOk = true;
+
+    assessments.forEach((assessment, index) => {
+      const file = quizFiles[index];
+      const resource = resources[index];
+      let quizDoc;
+
+      try {
+        quizDoc = parseXml(file.xml, file.name);
+      } catch (error) {
+        xmlOk = false;
+        structureOk = false;
+        return;
+      }
+
+      if (
+        resource.getAttribute("href") !== file.name ||
+        resource.getAttribute("title") !== assessment.title ||
+        resource.getAttribute("identifier") !== file.resourceId
+      ) structureOk = false;
+
+      const quizAssessment = firstByLocalName(quizDoc, "assessment");
+      if (!quizAssessment || quizAssessment.getAttribute("title") !== assessment.title) {
+        structureOk = false;
+        return;
+      }
+
+      const children = directChildren(quizAssessment).map(node => node.localName);
+      const required = ["rubric", "assessmentcontrol", "presentation_material", "assess_procextension", "assessfeedback", "section"];
+      if (!required.every(name => children.includes(name))) structureOk = false;
+
+      const container = directChildren(quizAssessment).find(node => node.localName === "section" && node.getAttribute("ident") === "CONTAINER_SECTION");
+      if (!container) {
+        structureOk = false;
+        return;
+      }
+
+      const outItems = [...container.getElementsByTagName("item")];
+      if (outItems.length !== assessment.questions.length) structureOk = false;
+
+      assessment.questions.forEach((sourceQuestion, questionIndex) => {
+        const outputItem = outItems[questionIndex];
+        if (!outputItem) {
+          structureOk = false;
+          return;
+        }
+
+        if (!fingerprintsMatch(sourceQuestion.fingerprint, fingerprint(outputItem))) structureOk = false;
+        if (containsIdentityMetadata(outputItem)) structureOk = false;
+        if (!arraysEqual(sourceQuestion.references, extractLocalReferences(outputItem))) structureOk = false;
+
+        const sourceWeight = getQuestionWeight(sourceQuestion.node);
+        const outputWeight = getQuestionWeight(outputItem);
+        if (sourceWeight !== null && sourceWeight > 0) {
+          if (outputWeight !== sourceWeight) structureOk = false;
+        } else if (outputWeight !== 1) {
+          structureOk = false;
+        }
+      });
+
+      const process = directChildren(quizAssessment).find(node => node.localName === "assess_procextension");
+      const active = process ? directChildren(process).find(node => node.localName === "is_active") : null;
+      if (!active || active.textContent.trim() !== "no") structureOk = false;
+    });
+
+    if (xmlOk) pass("Generated quiz XML files are well-formed.");
+    else fail("One or more generated quiz XML files are invalid.");
+
+    if (structureOk) pass("Quiz structure and source question content passed local validation.");
+    else fail("One or more generated quizzes differ unexpectedly from the source.");
+
+    return { ok: checks.every(check => check.status !== "fail"), checks };
+  }
+
+  function escapeXmlAttr(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   function createSectionPresentation(doc) {
@@ -517,7 +867,7 @@
     return a.length === b.length && a.every((value, index) => value === b[index]);
   }
 
-  function renderValidation(checks) {
+  function renderValidation(checks, mode = "question-library", quizCount = 0) {
     validationList.innerHTML = "";
 
     const manifestPassed = checks.some(check =>
@@ -525,13 +875,26 @@
       check.message === "Generated imsmanifest.xml is well-formed XML."
     );
 
-    const questionDbPassed = checks.some(check =>
-      check.status === "pass" &&
-      check.message === "Generated questiondb.xml is well-formed XML."
-    );
-
     if (manifestPassed) addValidationRow("Generated imsmanifest.xml", "pass");
-    if (questionDbPassed) addValidationRow("Generated questiondb.xml", "pass");
+
+    if (mode === "quizzes") {
+      const quizzesPassed = checks.some(check =>
+        check.status === "pass" &&
+        check.message === "Generated quiz XML files are well-formed."
+      );
+      if (quizzesPassed) {
+        addValidationRow(
+          `Generated ${quizCount} quiz file${quizCount === 1 ? "" : "s"}`,
+          "pass"
+        );
+      }
+    } else {
+      const questionDbPassed = checks.some(check =>
+        check.status === "pass" &&
+        check.message === "Generated questiondb.xml is well-formed XML."
+      );
+      if (questionDbPassed) addValidationRow("Generated questiondb.xml", "pass");
+    }
   }
 
   function addValidationRow(message, status) {
@@ -574,6 +937,9 @@
     analysisWarnings.innerHTML = "";
     resetButton.disabled = true;
     convertButton.disabled = true;
+    const questionLibraryOption = outputModeInputs.find(input => input.value === "question-library");
+    if (questionLibraryOption) questionLibraryOption.checked = true;
+    updateConversionUi();
   }
 
   // Selective ZIP reader: reads only the central directory and entries requested.
@@ -770,7 +1136,9 @@
     parseXml,
     parseSelfAssessment,
     buildQuestionLibrary,
+    buildQuizzes,
     validateConversion,
+    validateQuizConversion,
     createStoredZip,
     SelectiveZipReader
   };

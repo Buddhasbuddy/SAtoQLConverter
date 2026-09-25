@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import io
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -24,6 +25,12 @@ from .lti import (
 APP_NAME = "Brightspace Self-Assessment to Question Library Converter"
 OUTPUT_NAME = "Brightspace_QuestionLibrary_Migration.zip"
 REPO_ROOT = Path(__file__).resolve().parents[1]
+APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
+
+def public_url(path: str) -> str:
+    if APP_BASE_URL:
+        return f"{APP_BASE_URL}/{path.lstrip('/')}"
+    return f"/{path.lstrip('/')}"
 
 app = FastAPI(
     title=APP_NAME,
@@ -107,7 +114,7 @@ async def lti_launch(request: Request):
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Self-Assessment Migration</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="{html.escape(public_url('style.css'))}">
 </head>
 <body>
   <main class="shell">

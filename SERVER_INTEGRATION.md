@@ -20,6 +20,11 @@ or changing the current static application.
   course.
 - `server/brightspace.py` contains a client for Brightspace's documented
   course-import job API.
+- `server/lti.py` implements the initial LTI 1.3 OIDC login flow and validates
+  Brightspace's signed launch token against the platform JWKS.
+- `/lti/login` and `/lti/launch` are now available for a Brightspace test
+  registration. A successful launch displays the signed-in user and course
+  context received from Brightspace.
 
 ## Run locally
 
@@ -90,13 +95,14 @@ endpoint in production.
 
 The next integration milestone is therefore:
 
-1. Register the hosted application as an LTI 1.3 tool in a Brightspace test
-   environment.
-2. Validate the launch and capture the course org-unit context.
-3. Determine the supported source mechanism for enumerating and retrieving
+1. Deploy this branch to the hosted test server over HTTPS.
+2. Register `/lti/login` as the OpenID Connect Login URL and `/lti/launch` as
+   the Redirect URL in a Brightspace LTI 1.3 test registration.
+3. Confirm a launch validates successfully and inspect the course context.
+4. Determine the supported source mechanism for enumerating and retrieving
    Self-Assessments from that course.
-4. Feed those source questions into the existing converter.
-5. Submit the generated package directly to the same course through the
+5. Feed those source questions into the existing converter.
+6. Submit the generated package directly to the same course through the
    documented course-import job API.
 
 ## D2L references
@@ -109,3 +115,28 @@ The next integration milestone is therefore:
   https://docs.valence.desire2learn.com/res/course.html
 - File upload convention:
   https://docs.valence.desire2learn.com/basic/fileupload.html
+
+## LTI test configuration
+
+Set these environment variables before testing a launch:
+
+```text
+APP_BASE_URL=https://your-server.example.ca/sa-to-ql
+LTI_CLIENT_ID=<Brightspace registration client ID>
+LTI_DEPLOYMENT_ID=<Brightspace deployment ID>
+LTI_ISSUER=<issuer shown by Brightspace>
+LTI_PLATFORM_JWKS_URL=<Brightspace keyset URL>
+LTI_PLATFORM_AUTH_URL=<Brightspace OpenID Connect authentication endpoint>
+LTI_STATE_SECRET=<long random value>
+```
+
+For the Brightspace registration, the tool-side URLs are:
+
+```text
+OpenID Connect Login URL: {APP_BASE_URL}/lti/login
+Redirect URL:             {APP_BASE_URL}/lti/launch
+```
+
+The basic launch implementation does not yet request Names and Roles or
+Assignment and Grade Services. It only validates the launch and captures
+course/user context. This keeps the first integration test narrow.

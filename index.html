@@ -34,6 +34,8 @@
 
       <p class="note"><strong>Course files are not repackaged.</strong> Existing <code>src</code> and <code>href</code> references are preserved because the Question Library package is intended to be imported back into the same course.</p>
 
+      <div id="app-diagnostic" class="message warning hidden" role="status"></div>
+
       <div class="actions">
         <button id="reset-button" class="button secondary" type="button" disabled>Reset</button>
       </div>
@@ -85,10 +87,20 @@
     </section>
 
     <footer>
-      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course.</p>
+      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.0.1</strong></p>
     </footer>
   </main>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=1.0.1" onerror="window.__saqlScriptLoadFailed=true"></script>
+  <script>
+    window.addEventListener("load", function () {
+      const diagnostic = document.getElementById("app-diagnostic");
+      if (!diagnostic) return;
+      if (window.__saqlScriptLoadFailed || !window.SAQL) {
+        diagnostic.textContent = "Converter JavaScript did not load. Confirm that script.js is in the same GitHub Pages folder as index.html and that the filename uses exactly this lowercase spelling.";
+        diagnostic.classList.remove("hidden");
+      }
+    });
+  </script>
 </body>
 </html>

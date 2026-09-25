@@ -272,14 +272,11 @@
       parseXml(await zipCheck.readText(manifestEntry), "final imsmanifest.xml");
       parseXml(await zipCheck.readText(questionEntry), "final questiondb.xml");
 
-      addValidationRow("Final ZIP reopens and both serialized XML files parse successfully.", "pass");
-
       if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
       state.outputUrl = URL.createObjectURL(zipBlob);
       downloadLink.href = state.outputUrl;
       downloadLink.classList.remove("hidden");
-      setStatus(resultStatus, "Passed", "success");
-      showMessage(resultMessages, "Package passed local XML, structural, source-preservation, and reference-preservation validation.", "success");
+      setStatus(resultStatus, "Package passed local validation", "success");
     } catch (error) {
       console.error(error);
       setStatus(resultStatus, "Error", "error");
@@ -522,7 +519,19 @@
 
   function renderValidation(checks) {
     validationList.innerHTML = "";
-    checks.forEach(check => addValidationRow(check.message, check.status));
+
+    const manifestPassed = checks.some(check =>
+      check.status === "pass" &&
+      check.message === "Generated imsmanifest.xml is well-formed XML."
+    );
+
+    const questionDbPassed = checks.some(check =>
+      check.status === "pass" &&
+      check.message === "Generated questiondb.xml is well-formed XML."
+    );
+
+    if (manifestPassed) addValidationRow("Generated imsmanifest.xml", "pass");
+    if (questionDbPassed) addValidationRow("Generated questiondb.xml", "pass");
   }
 
   function addValidationRow(message, status) {

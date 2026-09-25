@@ -19,18 +19,18 @@
       <div class="section-heading">
         <div>
           <h2 id="upload-title">1. Select source files</h2>
-          <p>Use an original Brightspace course-export ZIP, or select one or more <code>selfassess_d2l_*.xml</code> files.</p>
+          <p>Use a Brightspace course package (ZIP), or select one or more <code>selfassess_d2l_*.xml</code> files.</p>
         </div>
       </div>
 
       <label id="drop-zone" class="drop-zone" for="file-input">
         <input id="file-input" type="file" multiple accept=".zip,.xml,application/zip,text/xml,application/xml">
         <span class="drop-icon" aria-hidden="true">⇧</span>
-        <strong>Drop a Brightspace export ZIP or Self-Assessment XML files here</strong>
+        <strong>Drop a Brightspace export ZIP folder or Self-Assessment XML files here</strong>
         <span>or click to choose files</span>
       </label>
 
-      <p class="note">Question Library package is intended to be imported back into the same course.</p>
+      <p class="note"><strong>Note: </strong>Question Library package is intended to be imported back into the same course.</p>
 
       <div id="app-diagnostic" class="message warning hidden" role="status"></div>
 
@@ -61,8 +61,7 @@
       <div class="section-heading">
         <div>
           <h2 id="result-title">3. Validation and download</h2>
-          <p>The package is offered only after structural and source-preservation validation passes.</p>
-        </div>
+                  </div>
         <span id="result-status" class="status-pill">Waiting</span>
       </div>
 

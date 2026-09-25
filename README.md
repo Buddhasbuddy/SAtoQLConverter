@@ -1,6 +1,5 @@
 Brightspace Self-Assessment → Question Library Converter
 
-A static browser-based converter designed for GitHub Pages.
 
 What it does
 
@@ -26,19 +25,6 @@ questiondb.xml
 
 Performs structural and source-preservation validation before enabling the download.
 
-Hosting on GitHub Pages
-
-Put index.html, style.css, and script.js in the repository root.
-
-Open Settings → Pages.
-
-Choose Deploy from a branch.
-
-Select main and / (root).
-
-Save.
-
-No server, API, or build step is required.
 
 Browser support
 

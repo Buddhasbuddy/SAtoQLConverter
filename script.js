@@ -5,6 +5,7 @@
   const QUESTION_LIBRARY_OUTPUT_NAME = "Brightspace_QuestionLibrary_Migration.zip";
   const QUIZ_OUTPUT_NAME = "Brightspace_SelfAssessment_Quizzes.zip";
   const XML_DEC = '<?xml version="1.0" encoding="UTF-8"?>';
+  const BUILD = "1.1.1";
 
   const fileInput = document.getElementById("file-input");
   const dropZone = document.getElementById("drop-zone");
@@ -1133,6 +1134,7 @@
 
   // Exposed for a lightweight browser test harness and future modularization.
   window.SAQL = {
+    build: BUILD,
     parseXml,
     parseSelfAssessment,
     buildQuestionLibrary,

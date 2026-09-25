@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import html
 import io
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 
 from .converter import ConversionError, convert_uploads
+from .lti import (
+    LtiConfigurationError,
+    LtiLaunchError,
+    create_login_redirect,
+    validate_launch,
+)
 
 APP_NAME = "Brightspace Self-Assessment to Question Library Converter"
 OUTPUT_NAME = "Brightspace_QuestionLibrary_Migration.zip"
@@ -35,9 +48,91 @@ async def capabilities() -> dict:
     return {
         "serverConversion": True,
         "brightspacePackageImport": True,
-        "ltiCourseContext": "planned",
+        "ltiCourseContext": True,
         "directSelfAssessmentDiscovery": False,
     }
+
+
+
+
+@app.api_route("/lti/login", methods=["GET", "POST"])
+async def lti_login(request: Request):
+    if request.method == "POST":
+        form = await request.form()
+        params = {key: str(value) for key, value in form.items()}
+    else:
+        params = dict(request.query_params)
+
+    try:
+        redirect_url = create_login_redirect(params)
+    except (LtiConfigurationError, LtiLaunchError) as exc:
+        return HTMLResponse(
+            f"<h1>LTI launch could not start</h1>"
+            f"<p>{html.escape(str(exc))}</p>",
+            status_code=400,
+        )
+
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@app.post("/lti/launch")
+async def lti_launch(request: Request):
+    form = await request.form()
+    id_token = str(form.get("id_token") or "")
+    state = str(form.get("state") or "")
+
+    if not id_token or not state:
+        return HTMLResponse(
+            "<h1>LTI launch failed</h1>"
+            "<p>The Brightspace launch did not include id_token and state.</p>",
+            status_code=400,
+        )
+
+    try:
+        context = await validate_launch(id_token=id_token, state=state)
+    except (LtiConfigurationError, LtiLaunchError) as exc:
+        return HTMLResponse(
+            f"<h1>LTI launch failed</h1>"
+            f"<p>{html.escape(str(exc))}</p>",
+            status_code=400,
+        )
+
+    possible_org_unit = context.possible_org_unit_id
+    course_id_display = possible_org_unit or context.context_id or "Not supplied"
+
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Self-Assessment Migration</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Brightspace LTI launch</p>
+        <h1>Self-Assessment Migration</h1>
+        <p class="lede">The hosted application successfully validated the Brightspace LTI 1.3 launch.</p>
+      </div>
+      <span class="badge">Course context received</span>
+    </header>
+
+    <section class="panel">
+      <h2>{html.escape(context.context_title)}</h2>
+      <p><strong>Course/context ID:</strong> {html.escape(course_id_display)}</p>
+      <p><strong>Signed-in user:</strong> {html.escape(context.name)}</p>
+      <p class="note">
+        Direct Self-Assessment discovery is the next integration step. The application
+        will not use an undocumented Brightspace endpoint for production access.
+      </p>
+    </section>
+  </main>
+</body>
+</html>"""
+    )
 
 
 @app.post("/api/convert")

@@ -179,3 +179,51 @@ footer { color: var(--muted); text-align: center; font-size: .88rem; padding-top
   .actions { justify-content: stretch; }
   .button { width: 100%; }
 }
+
+
+.conversion-options {
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.conversion-options legend {
+  margin-bottom: 10px;
+  font-weight: 800;
+}
+
+.conversion-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+.conversion-option:hover {
+  border-color: #aeb9c6;
+}
+
+.conversion-option:has(input:checked) {
+  border-color: var(--accent);
+  background: #f1f6ff;
+}
+
+.conversion-option input {
+  margin-top: 4px;
+}
+
+.conversion-option span {
+  display: grid;
+  gap: 2px;
+}
+
+.conversion-option small {
+  color: var(--muted);
+  line-height: 1.4;
+}

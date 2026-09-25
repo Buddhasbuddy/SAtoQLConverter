@@ -121,7 +121,7 @@ The next integration milestone is therefore:
 Set these environment variables before testing a launch:
 
 ```text
-APP_BASE_URL=https://your-server.example.ca/sa-to-ql
+APP_BASE_URL=https://lt.saskpolytech.ca/sa-to-ql
 LTI_CLIENT_ID=<Brightspace registration client ID>
 LTI_DEPLOYMENT_ID=<Brightspace deployment ID>
 LTI_ISSUER=<issuer shown by Brightspace>
@@ -133,8 +133,8 @@ LTI_STATE_SECRET=<long random value>
 For the Brightspace registration, the tool-side URLs are:
 
 ```text
-OpenID Connect Login URL: {APP_BASE_URL}/lti/login
-Redirect URL:             {APP_BASE_URL}/lti/launch
+OpenID Connect Login URL: https://lt.saskpolytech.ca/sa-to-ql/lti/login
+Redirect URL:             https://lt.saskpolytech.ca/sa-to-ql/lti/launch
 ```
 
 The basic launch implementation does not yet request Names and Roles or

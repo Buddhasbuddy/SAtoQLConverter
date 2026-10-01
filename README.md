@@ -63,3 +63,20 @@ Self-Assessment questions commonly have qmd_weighting=0. In Quiz mode, zero or m
 qmd_globalid and qmd_displayid are removed from copied questions to avoid carrying source-specific identity metadata into the new Quiz.
 
 The Quiz package manifest identifies each generated resource with d2l_2p0:material_type="d2lquiz".
+
+
+Interactive HTML practice mode
+
+The converter can create Brightspace-ready HTML content pages directly from Self-Assessment XML.
+
+- One Self-Assessment becomes one HTML content page.
+- Multiple Choice and True/False questions are converted to radio-button practice questions.
+- Selecting a response immediately reveals Correct/Incorrect status and the source answer-specific feedback.
+- Source hints are exposed through a Show hint control.
+- Source overall question feedback is shown with the selected response when available.
+- The page uses HTML/CSS only and does not require JavaScript for learner interaction.
+- Unsupported question types are reported rather than silently converted.
+- If one Self-Assessment is supplied, the tool downloads one .html file directly.
+- If multiple Self-Assessments are supplied, the tool downloads a ZIP containing one .html file per Self-Assessment.
+
+The HTML generator determines the correct response from the source QTI resprocessing/respcondition/varequal/setvar structure and follows displayfeedback links to the corresponding itemfeedback content.

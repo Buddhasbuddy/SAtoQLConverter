@@ -4,8 +4,9 @@
   const D2L_NS = "http://desire2learn.com/xsd/d2lcp_v2p0";
   const QUESTION_LIBRARY_OUTPUT_NAME = "Brightspace_QuestionLibrary_Migration.zip";
   const QUIZ_OUTPUT_NAME = "Brightspace_SelfAssessment_Quizzes.zip";
+  const HTML_OUTPUT_ZIP_NAME = "Brightspace_Interactive_HTML_Practices.zip";
   const XML_DEC = '<?xml version="1.0" encoding="UTF-8"?>';
-  const BUILD = "1.1.1";
+  const BUILD = "1.2.0";
 
   const fileInput = document.getElementById("file-input");
   const dropZone = document.getElementById("drop-zone");
@@ -257,6 +258,10 @@
       convertButton.textContent = "Create Quiz package";
       downloadLink.textContent = "Download Brightspace Quiz ZIP";
       downloadLink.download = QUIZ_OUTPUT_NAME;
+    } else if (mode === "interactive-html") {
+      convertButton.textContent = "Create interactive HTML";
+      downloadLink.textContent = "Download Brightspace HTML";
+      downloadLink.removeAttribute("download");
     } else {
       convertButton.textContent = "Create Question Library package";
       downloadLink.textContent = "Download Brightspace Question Library ZIP";
@@ -274,10 +279,12 @@
 
     try {
       const mode = currentOutputMode();
-      let outputFiles;
-      let outputName;
+      let outputFiles = [];
+      let outputName = "";
       let validation;
       let quizCount = 0;
+      let htmlCount = 0;
+      let outputBlob = null;
 
       if (mode === "quizzes") {
         const quizPackage = buildQuizzes(state.assessments);
@@ -288,6 +295,28 @@
         outputName = QUIZ_OUTPUT_NAME;
         quizCount = quizPackage.quizFiles.length;
         validation = validateQuizConversion(state.assessments, quizPackage.manifestXml, quizPackage.quizFiles);
+      } else if (mode === "interactive-html") {
+        const htmlPackage = buildInteractiveHtmlPages(state.assessments);
+        outputFiles = htmlPackage.pages.map(page => ({ name: page.name, text: page.html }));
+        htmlCount = htmlPackage.pages.length;
+        validation = validateInteractiveHtmlPages(htmlPackage.pages);
+
+        htmlPackage.pages.forEach(page => {
+          page.skipped.forEach(skipped => {
+            showMessage(
+              resultMessages,
+              `${page.title}: skipped ${skipped.type || "unsupported"} question (${skipped.reason}).`,
+              "warning"
+            );
+          });
+        });
+
+        if (htmlPackage.pages.length === 1) {
+          outputName = htmlPackage.pages[0].name;
+          outputBlob = new Blob([htmlPackage.pages[0].html], { type: "text/html;charset=utf-8" });
+        } else {
+          outputName = HTML_OUTPUT_ZIP_NAME;
+        }
       } else {
         const questionLibrary = buildQuestionLibrary(state.assessments);
         outputFiles = [
@@ -298,33 +327,38 @@
         validation = validateConversion(state.assessments, questionLibrary.manifestXml, questionLibrary.questionDbXml, questionLibrary.mappings);
       }
 
-      renderValidation(validation.checks, mode, quizCount);
+      renderValidation(validation.checks, mode, quizCount, htmlCount);
 
       if (!validation.ok) {
         setStatus(resultStatus, "Validation failed", "error");
-        showMessage(resultMessages, "The package was not generated because one or more validation checks failed.", "error");
+        showMessage(resultMessages, "The output was not generated because one or more validation checks failed.", "error");
         return;
       }
 
-      const zipBlob = createStoredZip(outputFiles);
+      if (!outputBlob) {
+        outputBlob = createStoredZip(outputFiles);
 
-      // Validate the ZIP bytes that will actually be returned.
-      const outputFile = new File([zipBlob], outputName, { type: "application/zip" });
-      const zipCheck = new SelectiveZipReader(outputFile);
-      await zipCheck.init();
+        // Validate the ZIP bytes that will actually be returned.
+        const outputFile = new File([outputBlob], outputName, { type: "application/zip" });
+        const zipCheck = new SelectiveZipReader(outputFile);
+        await zipCheck.init();
 
-      for (const file of outputFiles) {
-        const entry = zipCheck.findEntry(file.name);
-        if (!entry) throw new Error(`Final ZIP validation failed: ${file.name} was not found at ZIP root.`);
-        if (/\.xml$/i.test(file.name)) parseXml(await zipCheck.readText(entry), `final ${file.name}`);
+        for (const file of outputFiles) {
+          const entry = zipCheck.findEntry(file.name);
+          if (!entry) throw new Error(`Final ZIP validation failed: ${file.name} was not found at ZIP root.`);
+          if (/\.xml$/i.test(file.name)) parseXml(await zipCheck.readText(entry), `final ${file.name}`);
+        }
       }
 
       if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
-      state.outputUrl = URL.createObjectURL(zipBlob);
+      state.outputUrl = URL.createObjectURL(outputBlob);
       downloadLink.href = state.outputUrl;
       downloadLink.download = outputName;
+      downloadLink.textContent = mode === "interactive-html"
+        ? (htmlCount === 1 ? "Download Brightspace HTML page" : "Download Brightspace HTML ZIP")
+        : (mode === "quizzes" ? "Download Brightspace Quiz ZIP" : "Download Brightspace Question Library ZIP");
       downloadLink.classList.remove("hidden");
-      setStatus(resultStatus, "Package passed local validation", "success");
+      setStatus(resultStatus, "Output passed local validation", "success");
     } catch (error) {
       console.error(error);
       setStatus(resultStatus, "Error", "error");
@@ -670,6 +704,325 @@
       .replace(/>/g, "&gt;");
   }
 
+
+  function buildInteractiveHtmlPages(assessments) {
+    const usedNames = new Set();
+
+    const pages = assessments.map((assessment, assessmentIndex) => {
+      const models = [];
+      const skipped = [];
+
+      assessment.questions.forEach(question => {
+        if (!isInteractiveSupportedType(question.type)) {
+          skipped.push({
+            type: question.type,
+            reason: "Interactive HTML currently supports Multiple Choice and True/False"
+          });
+          return;
+        }
+
+        const model = buildInteractiveQuestionModel(question.node, question.type);
+        if (!model) {
+          skipped.push({
+            type: question.type,
+            reason: "a correct response could not be determined from the Self-Assessment answer processing"
+          });
+          return;
+        }
+        models.push(model);
+      });
+
+      let base = safeFilename(assessment.title) || `Self_Assessment_${assessmentIndex + 1}`;
+      let name = `${base}_Practice.html`;
+      let duplicate = 2;
+      while (usedNames.has(name.toLowerCase())) {
+        name = `${base}_Practice_${duplicate++}.html`;
+      }
+      usedNames.add(name.toLowerCase());
+
+      return {
+        name,
+        title: assessment.title,
+        html: renderInteractiveHtmlPage(assessment.title, models, skipped),
+        supportedCount: models.length,
+        skipped
+      };
+    });
+
+    return { pages };
+  }
+
+  function isInteractiveSupportedType(type) {
+    return type === "Multiple Choice" || type === "True/False";
+  }
+
+  function buildInteractiveQuestionModel(item, type) {
+    const presentation = firstByLocalName(item, "presentation");
+    const response = presentation
+      ? [...presentation.getElementsByTagName("*")].find(node => node.localName === "response_lid")
+      : null;
+    if (!presentation || !response) return null;
+
+    const questionMattext = [...presentation.getElementsByTagName("*")]
+      .find(node => node.localName === "mattext" && !hasAncestorLocalName(node, "response_label", presentation));
+    const questionHtml = questionMattext?.textContent || item.getAttribute("title") || "Question";
+
+    const answerLabels = [...response.getElementsByTagName("*")]
+      .filter(node => node.localName === "response_label");
+
+    if (answerLabels.length < 2) return null;
+
+    const conditions = [...item.getElementsByTagName("*")]
+      .filter(node => node.localName === "respcondition");
+    const feedbackNodes = [...item.getElementsByTagName("*")]
+      .filter(node => node.localName === "itemfeedback");
+    const feedbackById = new Map(
+      feedbackNodes
+        .map(node => [node.getAttribute("ident"), node])
+        .filter(([ident]) => ident)
+    );
+
+    const referencedFeedback = new Set();
+    const answers = answerLabels.map((label, index) => {
+      const ident = label.getAttribute("ident") || `answer_${index}`;
+      const textNode = [...label.getElementsByTagName("*")]
+        .find(node => node.localName === "mattext");
+      const matchingCondition = conditions.find(condition =>
+        [...condition.getElementsByTagName("*")].some(node =>
+          node.localName === "varequal" && node.textContent.trim() === ident
+        )
+      );
+
+      let correct = false;
+      let feedbackHtml = "";
+
+      if (matchingCondition) {
+        const scoreNodes = [...matchingCondition.getElementsByTagName("*")]
+          .filter(node => node.localName === "setvar");
+        correct = scoreNodes.some(node => {
+          const value = node.textContent.trim();
+          const numeric = Number.parseFloat(value);
+          return (Number.isFinite(numeric) && numeric > 0) || value === "D2L_Correct";
+        });
+
+        const feedbackLink = [...matchingCondition.getElementsByTagName("*")]
+          .find(node => node.localName === "displayfeedback");
+        const feedbackId = feedbackLink?.getAttribute("linkrefid");
+        if (feedbackId) {
+          referencedFeedback.add(feedbackId);
+          const feedbackNode = feedbackById.get(feedbackId);
+          const mattext = feedbackNode
+            ? [...feedbackNode.getElementsByTagName("*")].find(node => node.localName === "mattext")
+            : null;
+          feedbackHtml = mattext?.textContent || "";
+        }
+      }
+
+      return {
+        id: index,
+        ident,
+        html: textNode?.textContent || ident,
+        feedbackHtml,
+        correct
+      };
+    });
+
+    if (!answers.some(answer => answer.correct)) return null;
+
+    const itemLabel = item.getAttribute("label");
+    let overallFeedbackHtml = "";
+    if (itemLabel && feedbackById.has(itemLabel)) {
+      const overallNode = feedbackById.get(itemLabel);
+      const mattext = [...overallNode.getElementsByTagName("*")]
+        .find(node => node.localName === "mattext");
+      overallFeedbackHtml = mattext?.textContent || "";
+    } else {
+      const unreferenced = feedbackNodes.find(node => {
+        const ident = node.getAttribute("ident");
+        return ident && !referencedFeedback.has(ident);
+      });
+      const mattext = unreferenced
+        ? [...unreferenced.getElementsByTagName("*")].find(node => node.localName === "mattext")
+        : null;
+      overallFeedbackHtml = mattext?.textContent || "";
+    }
+
+    const hint = [...item.getElementsByTagName("*")].find(node => node.localName === "hint");
+    const hintMattext = hint
+      ? [...hint.getElementsByTagName("*")].find(node => node.localName === "mattext")
+      : null;
+
+    return {
+      type,
+      questionHtml,
+      answers,
+      hintHtml: hintMattext?.textContent || "",
+      overallFeedbackHtml
+    };
+  }
+
+  function hasAncestorLocalName(node, localName, stopNode) {
+    let current = node.parentElement;
+    while (current && current !== stopNode) {
+      if (current.localName === localName) return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function renderInteractiveHtmlPage(title, questions, skipped) {
+    const questionMarkup = questions.map((question, questionIndex) => {
+      const groupName = `sa-q-${questionIndex + 1}`;
+      const answers = question.answers.map((answer, answerIndex) => {
+        const id = `${groupName}-a-${answerIndex + 1}`;
+        const verdict = answer.correct ? "Correct." : "Incorrect.";
+        const feedback = answer.feedbackHtml
+          ? `<div class="sa-source-feedback">${answer.feedbackHtml}</div>`
+          : "";
+        const overall = question.overallFeedbackHtml
+          ? `<div class="sa-overall-feedback">${question.overallFeedbackHtml}</div>`
+          : "";
+
+        return `
+          <div class="sa-answer ${answer.correct ? "correct" : "incorrect"}">
+            <input type="radio" id="${id}" name="${groupName}">
+            <label for="${id}">${answer.html}</label>
+            <div class="sa-feedback" role="status" aria-live="polite">
+              <strong>${verdict}</strong>
+              ${feedback}
+              ${overall}
+            </div>
+          </div>`;
+      }).join("");
+
+      const hint = question.hintHtml
+        ? `<details class="sa-hint"><summary>Show hint</summary><div>${question.hintHtml}</div></details>`
+        : "";
+
+      return `
+        <section class="sa-question" data-sa-question="${questionIndex + 1}" aria-labelledby="sa-question-${questionIndex + 1}">
+          <p class="sa-question-number">Question ${questionIndex + 1} · ${escapeHtml(question.type)}</p>
+          <div class="sa-question-text" id="sa-question-${questionIndex + 1}">${question.questionHtml}</div>
+          <div class="sa-answers">
+            ${answers}
+          </div>
+          ${hint}
+        </section>`;
+    }).join("");
+
+    const skippedMarkup = skipped.length
+      ? `<aside class="sa-skipped" role="note">
+          <strong>Some source questions were not converted.</strong>
+          <p>${skipped.length} question${skipped.length === 1 ? "" : "s"} skipped: ${escapeHtml(
+            [...new Set(skipped.map(item => item.type || "Unknown"))].join(", ")
+          )}.</p>
+        </aside>`
+      : "";
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <link rel="stylesheet" href="https://templates.lcs.brightspace.com/lib/assets/css/styles.min.css">
+  <link rel="stylesheet" href="/shared/sp-template/styles/SP-bootstrap-grid.css" data-override="override">
+  <style>
+    :root{--sa-text:#202122;--sa-muted:#5f6670;--sa-border:#d8dde3;--sa-soft:#f7f8fa;--sa-correct:#16734b;--sa-correct-bg:#eaf7f0;--sa-incorrect:#9c2f25;--sa-incorrect-bg:#fff0ef;--sa-hint-bg:#f2f6fb;--sa-accent:#1f5f99}
+    *{box-sizing:border-box}
+    body{margin:0;color:var(--sa-text);font-family:Verdana,Arial,sans-serif;font-size:14px;line-height:1.55;background:#fff}
+    .sa-practice{max-width:900px;margin:0 auto;padding:24px 18px 40px}
+    .sa-header{border-bottom:1px solid var(--sa-border);padding-bottom:16px;margin-bottom:22px}
+    .sa-header h1{margin:0 0 8px;font-size:1.7rem;line-height:1.25}
+    .sa-header p{margin:0;color:var(--sa-muted)}
+    .sa-question{border:1px solid var(--sa-border);border-radius:10px;background:#fff;padding:20px;margin:0 0 20px}
+    .sa-question-number{margin:0 0 8px;color:var(--sa-muted);font-size:.86rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+    .sa-question-text{font-size:1.05rem;font-weight:600;margin-bottom:16px}
+    .sa-question-text p:first-child,.sa-answer label p:first-child,.sa-source-feedback p:first-child,.sa-overall-feedback p:first-child{margin-top:0}
+    .sa-question-text p:last-child,.sa-answer label p:last-child,.sa-source-feedback p:last-child,.sa-overall-feedback p:last-child{margin-bottom:0}
+    .sa-answer{position:relative;margin:10px 0}
+    .sa-answer input[type=radio]{position:absolute;top:16px;left:14px;margin:0}
+    .sa-answer label{display:block;cursor:pointer;border:1px solid var(--sa-border);border-radius:8px;background:var(--sa-soft);padding:12px 14px 12px 42px;min-height:48px}
+    .sa-answer label:hover{border-color:#a9b2bc;background:#fbfcfd}
+    .sa-answer input[type=radio]:focus + label{outline:3px solid rgba(31,95,153,.22);outline-offset:2px}
+    .sa-answer.correct input[type=radio]:checked + label{border-color:var(--sa-correct);background:var(--sa-correct-bg)}
+    .sa-answer.incorrect input[type=radio]:checked + label{border-color:var(--sa-incorrect);background:var(--sa-incorrect-bg)}
+    .sa-feedback{display:none;margin:8px 0 0;border-radius:8px;padding:10px 12px}
+    .sa-answer.correct input[type=radio]:checked ~ .sa-feedback{display:block;background:var(--sa-correct-bg);color:#0f5e3c;border-left:4px solid var(--sa-correct)}
+    .sa-answer.incorrect input[type=radio]:checked ~ .sa-feedback{display:block;background:var(--sa-incorrect-bg);color:#7d241d;border-left:4px solid var(--sa-incorrect)}
+    .sa-source-feedback{margin-top:5px}
+    .sa-overall-feedback{margin-top:7px;padding-top:7px;border-top:1px solid currentColor;opacity:.9}
+    .sa-hint{margin-top:14px;border-radius:8px;background:var(--sa-hint-bg);padding:10px 12px}
+    .sa-hint summary{cursor:pointer;font-weight:700;color:var(--sa-accent)}
+    .sa-hint div{margin-top:8px}
+    .sa-skipped{margin:18px 0;padding:12px 14px;border-radius:8px;background:#fff5df;color:#7d5200}
+    .sa-skipped p{margin:4px 0 0}
+    .sa-actions{display:flex;justify-content:flex-end;margin-top:22px}
+    .sa-reset{border:1px solid #9ca6b0;border-radius:8px;background:#fff;color:var(--sa-text);padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
+    .sa-reset:hover{background:#f4f6f8}
+    @media(max-width:600px){.sa-practice{padding:16px 10px 28px}.sa-question{padding:16px}}
+  </style>
+</head>
+<body>
+  <main class="sa-practice">
+    <header class="sa-header">
+      <h1>${escapeHtml(title)}</h1>
+      <p>This is an ungraded practice activity. Select a response to see immediate feedback. You can change your answer at any time.</p>
+    </header>
+    <form>
+      ${questionMarkup || '<p>No supported Multiple Choice or True/False questions were found.</p>'}
+      ${skippedMarkup}
+      ${questions.length ? '<div class="sa-actions"><button class="sa-reset" type="reset">Reset responses</button></div>' : ""}
+    </form>
+  </main>
+</body>
+</html>`;
+  }
+
+  function validateInteractiveHtmlPages(pages) {
+    const checks = [];
+    const pass = message => checks.push({ status: "pass", message });
+    const fail = message => checks.push({ status: "fail", message });
+
+    if (!pages.length) {
+      fail("No interactive HTML pages were generated.");
+      return { ok: false, checks };
+    }
+
+    let structureOk = true;
+    pages.forEach(page => {
+      if (!/^<!DOCTYPE html>/i.test(page.html.trim())) structureOk = false;
+      if (!page.html.includes("<form>")) structureOk = false;
+      const generatedQuestions = (page.html.match(/data-sa-question="/g) || []).length;
+      if (generatedQuestions !== page.supportedCount) structureOk = false;
+      if (page.supportedCount === 0) structureOk = false;
+    });
+
+    if (structureOk) pass("Generated interactive HTML page files.");
+    else fail("One or more HTML pages did not contain the expected interactive questions.");
+
+    return { ok: checks.every(check => check.status !== "fail"), checks };
+  }
+
+  function safeFilename(value) {
+    return String(value || "")
+      .normalize("NFKD")
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^[_\.]+|[_\.]+$/g, "")
+      .slice(0, 120);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   function createSectionPresentation(doc) {
     const presentation = doc.createElement("presentation_material");
     const flow1 = doc.createElement("flow_mat");
@@ -868,8 +1221,22 @@
     return a.length === b.length && a.every((value, index) => value === b[index]);
   }
 
-  function renderValidation(checks, mode = "question-library", quizCount = 0) {
+  function renderValidation(checks, mode = "question-library", quizCount = 0, htmlCount = 0) {
     validationList.innerHTML = "";
+
+    if (mode === "interactive-html") {
+      const htmlPassed = checks.some(check =>
+        check.status === "pass" &&
+        check.message === "Generated interactive HTML page files."
+      );
+      if (htmlPassed) {
+        addValidationRow(
+          `Generated ${htmlCount} interactive HTML page${htmlCount === 1 ? "" : "s"}`,
+          "pass"
+        );
+      }
+      return;
+    }
 
     const manifestPassed = checks.some(check =>
       check.status === "pass" &&
@@ -1139,6 +1506,7 @@
     parseSelfAssessment,
     buildQuestionLibrary,
     buildQuizzes,
+    buildInteractiveHtmlPages,
     validateConversion,
     validateQuizConversion,
     createStoredZip,

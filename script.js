@@ -6,7 +6,7 @@
   const QUIZ_OUTPUT_NAME = "Brightspace_SelfAssessment_Quizzes.zip";
   const HTML_OUTPUT_ZIP_NAME = "Brightspace_Interactive_HTML_Practices.zip";
   const XML_DEC = '<?xml version="1.0" encoding="UTF-8"?>';
-  const BUILD = "1.2.2";
+  const BUILD = "1.2.3";
 
   const fileInput = document.getElementById("file-input");
   const dropZone = document.getElementById("drop-zone");
@@ -875,27 +875,31 @@
     const questionMarkup = questions.map((question, questionIndex) => {
       const number = questionIndex + 1;
       const groupName = `sa-q-${number}`;
+
       const answers = question.answers.map((answer, answerIndex) => {
         const id = `${groupName}-a-${answerIndex + 1}`;
         const verdict = question.hasCorrectAnswer
           ? (answer.correct ? "Correct." : "Incorrect.")
           : "Feedback";
-        const answerState = question.hasCorrectAnswer
-          ? (answer.correct ? "correct" : "incorrect")
-          : "neutral";
+
         const feedback = answer.feedbackHtml
-          ? `<div class="sa-source-feedback">${answer.feedbackHtml}</div>`
+          ? `<div>${answer.feedbackHtml}</div>`
           : "";
         const overall = question.overallFeedbackHtml
-          ? `<div class="sa-overall-feedback">${question.overallFeedbackHtml}</div>`
+          ? `<div>${question.overallFeedbackHtml}</div>`
           : "";
 
         return `
-          <div class="sa-answer ${answerState}">
-            <input type="radio" id="${id}" name="${groupName}">
+          <div>
+            <input
+              type="radio"
+              id="${id}"
+              name="${groupName}"
+              data-question="${number}"
+              data-answer="${answerIndex + 1}">
             <label for="${id}">${answer.html}</label>
-            <div class="sa-feedback" role="status" aria-live="polite">
-              <strong>${verdict}</strong>
+            <div id="${id}-feedback" class="sa-feedback" role="status" aria-live="polite" hidden>
+              <p><strong>${verdict}</strong></p>
               ${feedback}
               ${overall}
             </div>
@@ -903,39 +907,41 @@
       }).join("");
 
       const hint = question.hintHtml
-        ? `<details class="sa-hint"><summary>Show hint</summary><div>${question.hintHtml}</div></details>`
+        ? `<details><summary>Show hint</summary><div>${question.hintHtml}</div></details>`
         : "";
 
       const previous = number > 1
-        ? `<a class="sa-nav-button secondary" href="#sa-question-${number - 1}">Previous question</a>`
-        : '<span class="sa-nav-spacer" aria-hidden="true"></span>';
+        ? `<button type="button" data-nav="previous" data-target="${number - 1}">Previous question</button>`
+        : "";
 
       const next = number < questions.length
-        ? `<a class="sa-nav-button primary" href="#sa-question-${number + 1}">Next question</a>`
-        : '<a class="sa-nav-button primary" href="#sa-question-1">Return to first question</a>';
+        ? `<button type="button" data-nav="next" data-target="${number + 1}">Next question</button>`
+        : `<button type="button" data-nav="next" data-target="1">Return to first question</button>`;
 
       return `
-        <section class="sa-question" id="sa-question-${number}" data-sa-question="${number}" aria-labelledby="sa-question-heading-${number}">
-          <div class="sa-progress" aria-label="Question ${number} of ${questions.length}">
-            <span>Question ${number} of ${questions.length}</span>
-            <div class="sa-progress-track" aria-hidden="true"><span style="width:${Math.round((number / questions.length) * 100)}%"></span></div>
-          </div>
-          <p class="sa-question-number">${escapeHtml(question.type)}</p>
-          <div class="sa-question-text" id="sa-question-heading-${number}">${question.questionHtml}</div>
-          <div class="sa-answers">
+        <section id="sa-question-${number}" data-sa-question="${number}" ${number === 1 ? "" : "hidden"}>
+          <p><strong>Question ${number} of ${questions.length}</strong></p>
+          <progress value="${number}" max="${questions.length}">${number} of ${questions.length}</progress>
+          <p><strong>${escapeHtml(question.type)}</strong></p>
+          <div id="sa-question-heading-${number}">${question.questionHtml}</div>
+
+          <fieldset aria-labelledby="sa-question-heading-${number}">
+            <legend>Select one response</legend>
             ${answers}
-          </div>
+          </fieldset>
+
           ${hint}
-          <nav class="sa-navigation" aria-label="Question navigation">
-            ${previous}
-            ${next}
-          </nav>
+
+          <div class="row">
+            <div class="col-6">${previous}</div>
+            <div class="col-6">${next}</div>
+          </div>
         </section>`;
     }).join("");
 
     const skippedMarkup = skipped.length
-      ? `<aside class="sa-skipped" role="note">
-          <strong>Some source questions were not converted.</strong>
+      ? `<aside role="note">
+          <p><strong>Some source questions were not converted.</strong></p>
           <p>${skipped.length} question${skipped.length === 1 ? "" : "s"} skipped: ${escapeHtml(
             [...new Set(skipped.map(item => item.type || "Unknown"))].join(", ")
           )}.</p>
@@ -950,73 +956,82 @@
   <title>${escapeHtml(title)}</title>
   <link rel="stylesheet" href="https://templates.lcs.brightspace.com/lib/assets/css/styles.min.css">
   <link rel="stylesheet" href="/shared/sp-template/styles/SP-bootstrap-grid.css" data-override="override">
-  <style>
-    :root{--sa-text:#202122;--sa-muted:#5f6670;--sa-border:#d8dde3;--sa-soft:#f7f8fa;--sa-correct:#16734b;--sa-correct-bg:#eaf7f0;--sa-incorrect:#9c2f25;--sa-incorrect-bg:#fff0ef;--sa-hint-bg:#f2f6fb;--sa-accent:#1f5f99;--sa-accent-hover:#194f80}
-    *{box-sizing:border-box}
-    html{scroll-behavior:smooth}
-    body{margin:0;color:var(--sa-text);font-family:Verdana,Arial,sans-serif;font-size:14px;line-height:1.55;background:#fff}
-    .sa-practice{max-width:900px;margin:0 auto;padding:24px 18px 40px}
-    .sa-header{border-bottom:1px solid var(--sa-border);padding-bottom:16px;margin-bottom:22px}
-    .sa-header h1{margin:0 0 8px;font-size:1.7rem;line-height:1.25}
-    .sa-header p{margin:0;color:var(--sa-muted)}
-    .sa-questions .sa-question{display:none}
-    .sa-questions .sa-question:first-child{display:block}
-    .sa-questions .sa-question:target{display:block}
-    .sa-questions:has(.sa-question:target) .sa-question:first-child:not(:target){display:none}
-    .sa-question{border:1px solid var(--sa-border);border-radius:10px;background:#fff;padding:20px;margin:0 0 20px;scroll-margin-top:16px}
-    .sa-progress{display:grid;gap:7px;margin-bottom:14px;color:var(--sa-muted);font-size:.86rem;font-weight:700}
-    .sa-progress-track{height:6px;border-radius:999px;background:#e7ebef;overflow:hidden}
-    .sa-progress-track span{display:block;height:100%;background:var(--sa-accent);border-radius:999px}
-    .sa-question-number{margin:0 0 8px;color:var(--sa-muted);font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
-    .sa-question-text{font-size:1.05rem;font-weight:600;margin-bottom:16px}
-    .sa-question-text p:first-child,.sa-answer label p:first-child,.sa-source-feedback p:first-child,.sa-overall-feedback p:first-child{margin-top:0}
-    .sa-question-text p:last-child,.sa-answer label p:last-child,.sa-source-feedback p:last-child,.sa-overall-feedback p:last-child{margin-bottom:0}
-    .sa-answer{position:relative;margin:10px 0}
-    .sa-answer input[type=radio]{position:absolute;top:16px;left:14px;margin:0}
-    .sa-answer label{display:block;cursor:pointer;border:1px solid var(--sa-border);border-radius:8px;background:var(--sa-soft);padding:12px 14px 12px 42px;min-height:48px}
-    .sa-answer label:hover{border-color:#a9b2bc;background:#fbfcfd}
-    .sa-answer input[type=radio]:focus + label{outline:3px solid rgba(31,95,153,.22);outline-offset:2px}
-    .sa-answer.correct input[type=radio]:checked + label{border-color:var(--sa-correct);background:var(--sa-correct-bg)}
-    .sa-answer.incorrect input[type=radio]:checked + label{border-color:var(--sa-incorrect);background:var(--sa-incorrect-bg)}
-    .sa-answer.neutral input[type=radio]:checked + label{border-color:var(--sa-accent);background:#eef5fb}
-    .sa-feedback{display:none;margin:8px 0 0;border-radius:8px;padding:10px 12px}
-    .sa-answer.correct input[type=radio]:checked ~ .sa-feedback{display:block;background:var(--sa-correct-bg);color:#0f5e3c;border-left:4px solid var(--sa-correct)}
-    .sa-answer.incorrect input[type=radio]:checked ~ .sa-feedback{display:block;background:var(--sa-incorrect-bg);color:#7d241d;border-left:4px solid var(--sa-incorrect)}
-    .sa-answer.neutral input[type=radio]:checked ~ .sa-feedback{display:block;background:#eef5fb;color:#174c75;border-left:4px solid var(--sa-accent)}
-    .sa-source-feedback{margin-top:5px}
-    .sa-overall-feedback{margin-top:7px;padding-top:7px;border-top:1px solid currentColor;opacity:.9}
-    .sa-hint{margin-top:14px;border-radius:8px;background:var(--sa-hint-bg);padding:10px 12px}
-    .sa-hint summary{cursor:pointer;font-weight:700;color:var(--sa-accent)}
-    .sa-hint div{margin-top:8px}
-    .sa-navigation{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:22px;padding-top:18px;border-top:1px solid var(--sa-border)}
-    .sa-nav-button{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:10px 14px;text-decoration:none;font-weight:700;min-height:42px}
-    .sa-nav-button.primary{background:var(--sa-accent);color:#fff}
-    .sa-nav-button.primary:hover,.sa-nav-button.primary:focus{background:var(--sa-accent-hover);color:#fff}
-    .sa-nav-button.secondary{background:#eef1f4;color:var(--sa-text)}
-    .sa-nav-button.secondary:hover,.sa-nav-button.secondary:focus{background:#e2e6ea;color:var(--sa-text)}
-    .sa-nav-spacer{display:block}
-    .sa-skipped{margin:18px 0;padding:12px 14px;border-radius:8px;background:#fff5df;color:#7d5200}
-    .sa-skipped p{margin:4px 0 0}
-    .sa-actions{display:flex;justify-content:flex-end;margin-top:22px}
-    .sa-reset{border:1px solid #9ca6b0;border-radius:8px;background:#fff;color:var(--sa-text);padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
-    .sa-reset:hover{background:#f4f6f8}
-    @media(max-width:600px){.sa-practice{padding:16px 10px 28px}.sa-question{padding:16px}.sa-navigation{align-items:stretch}.sa-nav-button{flex:1;text-align:center}}
-  </style>
 </head>
 <body>
-  <main class="sa-practice">
-    <header class="sa-header">
-      <h1>${escapeHtml(title)}</h1>
-      <p>This is an ungraded practice activity. Select a response to see immediate feedback, then use Next question to continue.</p>
-    </header>
-    <form>
-      <div class="sa-questions">
-        ${questionMarkup || '<p>No supported Multiple Choice or True/False questions were found.</p>'}
+  <main class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <header>
+          <h1>${escapeHtml(title)}</h1>
+          <p>This is an ungraded practice activity. Select a response to see immediate feedback, then use Next question to continue.</p>
+        </header>
+
+        <form id="sa-practice-form">
+          ${questionMarkup || "<p>No supported Multiple Choice or True/False questions were found.</p>"}
+          ${skippedMarkup}
+
+          ${questions.length ? `<p><button type="reset" id="sa-reset">Reset responses</button></p>` : ""}
+        </form>
       </div>
-      ${skippedMarkup}
-      ${questions.length ? '<div class="sa-actions"><button class="sa-reset" type="reset">Reset responses</button></div>' : ""}
-    </form>
+    </div>
   </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const form = document.getElementById("sa-practice-form");
+      if (!form) return;
+
+      const sections = [...form.querySelectorAll("[data-sa-question]")];
+
+      function showQuestion(number) {
+        sections.forEach(section => {
+          section.hidden = section.getAttribute("data-sa-question") !== String(number);
+        });
+
+        const current = sections.find(
+          section => section.getAttribute("data-sa-question") === String(number)
+        );
+
+        if (current) {
+          const heading = current.querySelector("[id^='sa-question-heading-']");
+          if (heading) heading.setAttribute("tabindex", "-1");
+          if (heading && typeof heading.focus === "function") heading.focus();
+        }
+      }
+
+      form.addEventListener("change", event => {
+        const input = event.target.closest("input[type='radio'][data-question]");
+        if (!input) return;
+
+        const section = input.closest("[data-sa-question]");
+        if (!section) return;
+
+        section.querySelectorAll(".sa-feedback").forEach(node => {
+          node.hidden = true;
+        });
+
+        const feedback = document.getElementById(input.id + "-feedback");
+        if (feedback) feedback.hidden = false;
+      });
+
+      form.addEventListener("click", event => {
+        const button = event.target.closest("button[data-target]");
+        if (!button) return;
+        showQuestion(button.getAttribute("data-target"));
+      });
+
+      form.addEventListener("reset", () => {
+        window.setTimeout(() => {
+          form.querySelectorAll(".sa-feedback").forEach(node => {
+            node.hidden = true;
+          });
+          showQuestion(1);
+        }, 0);
+      });
+    }());
+  </script>
 </body>
 </html>`;
   }

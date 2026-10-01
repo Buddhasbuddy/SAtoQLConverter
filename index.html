@@ -102,11 +102,11 @@
     </section>
 
     <footer>
-      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.2.2</strong></p>
+      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.2.3</strong></p>
     </footer>
   </main>
 
-  <script src="script.js?v=1.2.2" onerror="window.__saqlScriptLoadFailed=true"></script>
+  <script src="script.js?v=1.2.3" onerror="window.__saqlScriptLoadFailed=true"></script>
   <script>
     window.addEventListener("load", function () {
       const diagnostic = document.getElementById("app-diagnostic");
@@ -116,8 +116,8 @@
         diagnostic.classList.remove("hidden");
         return;
       }
-      if (window.SAQL.build !== "1.2.2") {
-        diagnostic.textContent = "An older cached converter script is still loaded. Refresh the page with Ctrl+F5. Expected build 1.2.2 but loaded " + (window.SAQL.build || "an unversioned script") + ".";
+      if (window.SAQL.build !== "1.2.3") {
+        diagnostic.textContent = "An older cached converter script is still loaded. Refresh the page with Ctrl+F5. Expected build 1.2.3 but loaded " + (window.SAQL.build || "an unversioned script") + ".";
         diagnostic.classList.remove("hidden");
       }
     });

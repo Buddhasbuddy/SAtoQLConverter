@@ -963,7 +963,7 @@
       <div class="col-12">
         <header>
           <h1>${escapeHtml(title)}</h1>
-          <p>This is an ungraded practice activity. Select a response to see immediate feedback, then use Next question to continue.</p>
+          <p>This is an ungraded practice activity. Select a response to see immediate feedback, then continue to the next question.</p>
         </header>
 
         <form id="sa-practice-form">

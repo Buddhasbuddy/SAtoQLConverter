@@ -11,7 +11,7 @@
     <header class="hero">
       <div>
         <h1>Brightspace Self-Assessment Converter</h1>
-        <p class="lede">Convert Brightspace Self-Assessments into Question Library folders or Quizzes.</p>
+        <p class="lede">Convert Brightspace Self-Assessments into Question Library folders, Quizzes, or interactive HTML practice pages.</p>
       </div>
     </header>
 
@@ -68,6 +68,14 @@
             <small>Create one inactive Quiz for each Self-Assessment. Zero-point Self-Assessment questions become 1-point quiz questions.</small>
           </span>
         </label>
+
+        <label class="conversion-option">
+          <input type="radio" name="output-mode" value="interactive-html">
+          <span>
+            <strong>Interactive HTML practice</strong>
+            <small>Create one Brightspace-ready HTML content page for each Self-Assessment. Multiple Choice and True/False questions display immediate feedback when a learner selects a response.</small>
+          </span>
+        </label>
       </fieldset>
 
       <div id="analysis-warnings" class="messages"></div>
@@ -94,11 +102,11 @@
     </section>
 
     <footer>
-      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.1.1</strong></p>
+      <p>Designed for Brightspace Self-Assessments that will be migrated back into the same course. <strong>Build 1.2.0</strong></p>
     </footer>
   </main>
 
-  <script src="script.js?v=1.1.1" onerror="window.__saqlScriptLoadFailed=true"></script>
+  <script src="script.js?v=1.2.0" onerror="window.__saqlScriptLoadFailed=true"></script>
   <script>
     window.addEventListener("load", function () {
       const diagnostic = document.getElementById("app-diagnostic");
@@ -108,8 +116,8 @@
         diagnostic.classList.remove("hidden");
         return;
       }
-      if (window.SAQL.build !== "1.1.1") {
-        diagnostic.textContent = "An older cached converter script is still loaded. Refresh the page with Ctrl+F5. Expected build 1.1.1 but loaded " + (window.SAQL.build || "an unversioned script") + ".";
+      if (window.SAQL.build !== "1.2.0") {
+        diagnostic.textContent = "An older cached converter script is still loaded. Refresh the page with Ctrl+F5. Expected build 1.2.0 but loaded " + (window.SAQL.build || "an unversioned script") + ".";
         diagnostic.classList.remove("hidden");
       }
     });

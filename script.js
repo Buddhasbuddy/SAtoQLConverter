@@ -6,7 +6,7 @@
   const QUIZ_OUTPUT_NAME = "Brightspace_SelfAssessment_Quizzes.zip";
   const HTML_OUTPUT_ZIP_NAME = "Brightspace_Interactive_HTML_Practices.zip";
   const XML_DEC = '<?xml version="1.0" encoding="UTF-8"?>';
-  const BUILD = "1.2.3";
+  const BUILD = "1.2.4";
 
   const fileInput = document.getElementById("file-input");
   const dropZone = document.getElementById("drop-zone");
@@ -911,12 +911,12 @@
         : "";
 
       const previous = number > 1
-        ? `<button type="button" data-nav="previous" data-target="${number - 1}">Previous question</button>`
+        ? `<a href="#sa-question-${number - 1}" data-target="${number - 1}">← Previous question</a>`
         : "";
 
       const next = number < questions.length
-        ? `<button type="button" data-nav="next" data-target="${number + 1}">Next question</button>`
-        : `<button type="button" data-nav="next" data-target="1">Return to first question</button>`;
+        ? `<a href="#sa-question-${number + 1}" data-target="${number + 1}">Next question →</a>`
+        : `<a href="#sa-question-1" data-target="1">Return to first question</a>`;
 
       return `
         <section id="sa-question-${number}" data-sa-question="${number}" ${number === 1 ? "" : "hidden"}>

@@ -6,7 +6,7 @@
   const QUIZ_OUTPUT_NAME = "Brightspace_SelfAssessment_Quizzes.zip";
   const HTML_OUTPUT_ZIP_NAME = "Brightspace_Interactive_HTML_Practices.zip";
   const XML_DEC = '<?xml version="1.0" encoding="UTF-8"?>';
-  const BUILD = "1.2.1";
+  const BUILD = "1.2.2";
 
   const fileInput = document.getElementById("file-input");
   const dropZone = document.getElementById("drop-zone");
@@ -725,7 +725,7 @@
         if (!model) {
           skipped.push({
             type: question.type,
-            reason: "a correct response could not be determined from the Self-Assessment answer processing"
+            reason: "the question response structure could not be converted"
           });
           return;
         }
@@ -827,7 +827,7 @@
       };
     });
 
-    if (!answers.some(answer => answer.correct)) return null;
+    const hasCorrectAnswer = answers.some(answer => answer.correct);
 
     const itemLabel = item.getAttribute("label");
     let overallFeedbackHtml = "";
@@ -856,6 +856,7 @@
       type,
       questionHtml,
       answers,
+      hasCorrectAnswer,
       hintHtml: hintMattext?.textContent || "",
       overallFeedbackHtml
     };
@@ -876,7 +877,12 @@
       const groupName = `sa-q-${number}`;
       const answers = question.answers.map((answer, answerIndex) => {
         const id = `${groupName}-a-${answerIndex + 1}`;
-        const verdict = answer.correct ? "Correct." : "Incorrect.";
+        const verdict = question.hasCorrectAnswer
+          ? (answer.correct ? "Correct." : "Incorrect.")
+          : "Feedback";
+        const answerState = question.hasCorrectAnswer
+          ? (answer.correct ? "correct" : "incorrect")
+          : "neutral";
         const feedback = answer.feedbackHtml
           ? `<div class="sa-source-feedback">${answer.feedbackHtml}</div>`
           : "";
@@ -885,7 +891,7 @@
           : "";
 
         return `
-          <div class="sa-answer ${answer.correct ? "correct" : "incorrect"}">
+          <div class="sa-answer ${answerState}">
             <input type="radio" id="${id}" name="${groupName}">
             <label for="${id}">${answer.html}</label>
             <div class="sa-feedback" role="status" aria-live="polite">
@@ -972,9 +978,11 @@
     .sa-answer input[type=radio]:focus + label{outline:3px solid rgba(31,95,153,.22);outline-offset:2px}
     .sa-answer.correct input[type=radio]:checked + label{border-color:var(--sa-correct);background:var(--sa-correct-bg)}
     .sa-answer.incorrect input[type=radio]:checked + label{border-color:var(--sa-incorrect);background:var(--sa-incorrect-bg)}
+    .sa-answer.neutral input[type=radio]:checked + label{border-color:var(--sa-accent);background:#eef5fb}
     .sa-feedback{display:none;margin:8px 0 0;border-radius:8px;padding:10px 12px}
     .sa-answer.correct input[type=radio]:checked ~ .sa-feedback{display:block;background:var(--sa-correct-bg);color:#0f5e3c;border-left:4px solid var(--sa-correct)}
     .sa-answer.incorrect input[type=radio]:checked ~ .sa-feedback{display:block;background:var(--sa-incorrect-bg);color:#7d241d;border-left:4px solid var(--sa-incorrect)}
+    .sa-answer.neutral input[type=radio]:checked ~ .sa-feedback{display:block;background:#eef5fb;color:#174c75;border-left:4px solid var(--sa-accent)}
     .sa-source-feedback{margin-top:5px}
     .sa-overall-feedback{margin-top:7px;padding-top:7px;border-top:1px solid currentColor;opacity:.9}
     .sa-hint{margin-top:14px;border-radius:8px;background:var(--sa-hint-bg);padding:10px 12px}

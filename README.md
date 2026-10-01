@@ -74,7 +74,7 @@ The converter can create Brightspace-ready HTML content pages directly from Self
 - Selecting a response immediately reveals Correct/Incorrect status and the source answer-specific feedback.
 - Source hints are exposed through a Show hint control.
 - Source overall question feedback is shown with the selected response when available.
-- The page uses HTML/CSS only and does not require JavaScript for learner interaction.
+- The page uses HTML/CSS only and does not require JavaScript for learner interaction. It presents one question at a time with Previous/Next navigation and a question-progress indicator.
 - Unsupported question types are reported rather than silently converted.
 - If one Self-Assessment is supplied, the tool downloads one .html file directly.
 - If multiple Self-Assessments are supplied, the tool downloads a ZIP containing one .html file per Self-Assessment.

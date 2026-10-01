@@ -1017,7 +1017,7 @@
       });
 
       form.addEventListener("click", event => {
-        const button = event.target.closest("button[data-target]");
+        const link = event.target.closest("a[data-target]");
         if (!button) return;
         showQuestion(button.getAttribute("data-target"));
       });
